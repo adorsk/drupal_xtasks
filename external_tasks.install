@@ -1,0 +1,123 @@
+<?php
+
+/**
+ * @file
+ *   external_tasks module install hooks.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function external_tasks_install() {
+  // Pointer to translation function.
+  $t = get_t();
+
+  // Define external_task content type.
+  $external_task = array(
+    'type' => 'external_task',
+    'name' => $t('External Task'),
+    'base' => 'node_content',
+    'description' => $t('An external task. Contains metadata for running the task, and the state of the task.'),
+    'title_label' => $t('Title'),
+  );
+  $content_type = node_type_set_defaults($external_task);
+  node_type_save($content_type);
+
+  // Create all the fields we are adding to our content type.
+  $fields = _external_tasks_fields();
+  foreach ($fields as $field) {
+    field_create_field($field);
+  }
+
+  // Create all the instances for our fields.
+  $field_instances = array(
+    'external_task_config' => array(
+      'field_name' => 'external_task_config',
+      'label' => $t('Config'),
+      'widget' => array(
+        'type' => 'text_textarea'
+      ),
+    ),
+    'external_task_data' => array(
+      'field_name' => 'external_task_data',
+      'label' => $t('Data'),
+      'widget' => array(
+        'type' => 'text_textarea'
+      ),
+    ),
+    // @TODO: might want to limit this to a set
+    // of defined choices, for better management interface...
+    'external_task_status' => array(
+      'field_name' => 'external_task_status',
+      'label' => $t('Status'),
+      'widget' => array(
+        'type' => 'text_textfield'
+      ),
+    ),
+  );
+  foreach ($field_instances as $instance) {
+    $instance['entity_type'] = 'node';
+    $instance['bundle'] = $external_task['type'];
+    field_create_instance($instance);
+  }
+}
+
+/**
+ * Define fields.
+ */
+function _external_tasks_fields(){
+  return array(
+    // Config field.
+    'external_task_config' => array(
+      'field_name' => 'external_task_config',
+      'cardinality' => 1,
+      'type' => 'text',
+    ),
+    // Data field.
+    'external_task_data' => array(
+      'field_name' => 'external_task_data',
+      'cardinality' => 1,
+      'type' => 'text',
+    ),
+    // Status field.
+    'external_task_status' => array(
+      'field_name' => 'external_task_status',
+      'cardinality' => 1,
+      'type' => 'text',
+    )
+  );
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function external_tasks_uninstall() {
+  // Delete all tasks that might have been created while this
+  // module was enabled.
+  $sql = 'SELECT nid FROM {node} n WHERE n.type = :type';
+  $result = db_query($sql, array(':type' => 'external_task'));
+  $nids = array();
+  foreach ($result as $row) {
+    $nids[] = $row->nid;
+  }
+  node_delete_multiple($nids);
+
+  // Loop over each of the fields defined by this module and delete
+  // all instances of the field, their data, and the field itself.
+  foreach (array_keys(_external_tasks_fields()) as $field) {
+    field_delete_field($field);
+  }
+
+  // Loop over any remaining field instances attached to the 
+  // external_task content type and delete them individually.
+  $instances = field_info_instances('node', 'external_task');
+  foreach ($instances as $instance_name => $instance) {
+    field_delete_instance($instance);
+  }
+
+  // Delete our content type
+  node_type_delete('external_task');
+
+  // Purge all field infromation
+  field_purge_batch(1000);
+}
