@@ -60,6 +60,13 @@ function external_tasks_install() {
     $instance['bundle'] = $external_task['type'];
     field_create_instance($instance);
   }
+
+  // Create services endpoint via ctools export library.
+  ctools_include('export');
+  $services_endpoint_file = dirname(__FILE__) . '/services_endpoint.export';
+  $services_endpoint_code = file_get_contents($services_endpoint_file);
+  $endpoint = ctools_export_crud_import('services_endpoint', $services_endpoint_code);
+  ctools_export_crud_save('services_endpoint', $endpoint);
 }
 
 /**
@@ -120,4 +127,8 @@ function external_tasks_uninstall() {
 
   // Purge all field infromation
   field_purge_batch(1000);
+
+  // Delete endpoint.
+  ctools_include('export');
+  ctools_export_crud_delete('services_endpoint', 'external_tasks');
 }
