@@ -11,6 +11,7 @@ function external_tasks_menu(){
     'page arguments' => array(2),
     'type' => MENU_CALLBACK,
   );
+  return $items;
 }
 
 /**
@@ -32,10 +33,44 @@ function external_tasks_node_info(){
  * a specific task. The token is the method of access
  * control. The token is generated when a task is created.
  */
-function external_tasks_update_task_ep($task_token){
-  // Get token record from db.
-  // Get the data from the post.
-  // Update task corresponding to the token.
+function external_tasks_update_task_ep($token){
+  if (! $token){
+    return MENU_NOT_FOUND;
+  }
+
+  // Get task corresponding to token.
+  $token_record = db_query(
+    "SELECT token, nid FROM {external_tasks_tokens} WHERE token = :token",
+    array(':token' => $token))->fetchObject();
+
+  if (! $token_record){
+    return MENU_NOT_FOUND;
+  }
+
+  // Parse posted data.
+  // Parse posted data.
+  $json_data = file_get_contents("php://input");
+  $data = json_decode($json_data, true);
+
+  // Update task with posted data.
+  $node = node_load($token_record->nid);
+  if (! $node){
+    return MENU_NOT_FOUND;
+  }
+  $field_attrs = array('status', 'data');
+  foreach($field_attrs as $field_attr){
+    if (array_key_exists($field_attr, $data)){
+      $node->{"external_task_$field_attr"} = array(
+        LANGUAGE_NONE => array(
+          array('value' => $data[$field_attr])
+        )
+      );
+    }
+  }
+  node_save($node);
+
+  drupal_json_output(array('foo' => 'bar'));
+  drupal_exit();
 }
 
 /**
