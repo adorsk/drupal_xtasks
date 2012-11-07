@@ -1,4 +1,4 @@
-name = External Tasks
+name = XTasks
 description = Launches and monitors external tasks.
 core = 7.x
-package = External Tasks
+package = XTasks

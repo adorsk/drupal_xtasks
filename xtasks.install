@@ -2,15 +2,15 @@
 
 /**
  * @file
- *   external_tasks module install hooks.
+ *   xtasks module install hooks.
  */
 
 /**
  * Implements hook_schema().
  */
-function external_tasks_schema(){
-  $schema['external_tasks_tokens'] = array(
-    'description' => 'Access tokens for external tasks.',
+function xtasks_schema(){
+  $schema['xtasks_tokens'] = array(
+    'description' => 'Access tokens for xtasks.',
     'fields' => array(
       'token' => array(
         'description' => 'Token string.',
@@ -39,7 +39,7 @@ function external_tasks_schema(){
 /**
  * Implements hook_install().
  */
-function external_tasks_install() {
+function xtasks_install() {
   // Pointer to translation function.
   $t = get_t();
 
@@ -48,15 +48,15 @@ function external_tasks_install() {
   $types = node_type_get_types();
 
   // Create all the fields we are adding to our content type.
-  $fields = _external_tasks_fields();
+  $fields = _xtasks_fields();
   foreach ($fields as $field) {
     field_create_field($field);
   }
 
   // Create all the instances for our fields.
   $field_instances = array(
-    'external_task_token' => array(
-      'field_name' => 'external_task_token',
+    'xtask_token' => array(
+      'field_name' => 'xtask_token',
       'label' => $t('Token'),
       'widget' => array(
         'type' => 'text_textarea'
@@ -67,23 +67,30 @@ function external_tasks_install() {
         )
       )
     ),
-    'external_task_config' => array(
-      'field_name' => 'external_task_config',
+    'xtask_config' => array(
+      'field_name' => 'xtask_config',
       'label' => $t('Config'),
       'widget' => array(
         'type' => 'text_textarea'
       ),
     ),
-    'external_task_data' => array(
-      'field_name' => 'external_task_data',
+    'xtask_data' => array(
+      'field_name' => 'xtask_data',
       'label' => $t('Data'),
       'widget' => array(
         'type' => 'text_textarea'
       ),
     ),
-    'external_task_status' => array(
-      'field_name' => 'external_task_status',
+    'xtask_status' => array(
+      'field_name' => 'xtask_status',
       'label' => $t('Status'),
+      'widget' => array(
+        'type' => 'text_textfield'
+      ),
+    ),
+    'xtask_status_page_callback' => array(
+      'field_name' => 'xtask_status_page_callback',
+      'label' => $t('Status page callback'),
       'widget' => array(
         'type' => 'text_textfield'
       ),
@@ -91,7 +98,7 @@ function external_tasks_install() {
   );
   foreach ($field_instances as $instance) {
     $instance['entity_type'] = 'node';
-    $instance['bundle'] = 'external_task';
+    $instance['bundle'] = 'xtask';
     field_create_instance($instance);
   }
 
@@ -100,30 +107,37 @@ function external_tasks_install() {
 /**
  * Define fields.
  */
-function _external_tasks_fields(){
+function _xtasks_fields(){
   return array(
     // Token field.
-    'external_task_token' => array(
-      'field_name' => 'external_task_token',
+    'xtask_token' => array(
+      'field_name' => 'xtask_token',
       'cardinality' => 1,
       'type' => 'text',
       'locked' => TRUE,
     ),
     // Config field.
-    'external_task_config' => array(
-      'field_name' => 'external_task_config',
+    'xtask_config' => array(
+      'field_name' => 'xtask_config',
       'cardinality' => 1,
       'type' => 'text',
     ),
     // Data field.
-    'external_task_data' => array(
-      'field_name' => 'external_task_data',
+    'xtask_data' => array(
+      'field_name' => 'xtask_data',
       'cardinality' => 1,
       'type' => 'text',
     ),
     // Status field.
-    'external_task_status' => array(
-      'field_name' => 'external_task_status',
+    'xtask_status' => array(
+      'field_name' => 'xtask_status',
+      'cardinality' => 1,
+      'type' => 'text',
+    ),
+
+    // Status page callback.
+    'xtask_status_page_callback' => array(
+      'field_name' => 'xtask_status_page_callback',
       'cardinality' => 1,
       'type' => 'text',
     )
@@ -133,11 +147,11 @@ function _external_tasks_fields(){
 /**
  * Implements hook_uninstall().
  */
-function external_tasks_uninstall() {
+function xtasks_uninstall() {
   // Delete all tasks that might have been created while this
   // module was enabled.
   $sql = 'SELECT nid FROM {node} n WHERE n.type = :type';
-  $result = db_query($sql, array(':type' => 'external_task'));
+  $result = db_query($sql, array(':type' => 'xtask'));
   $nids = array();
   foreach ($result as $row) {
     $nids[] = $row->nid;
@@ -146,19 +160,19 @@ function external_tasks_uninstall() {
 
   // Loop over each of the fields defined by this module and delete
   // all instances of the field, their data, and the field itself.
-  foreach (array_keys(_external_tasks_fields()) as $field) {
+  foreach (array_keys(_xtasks_fields()) as $field) {
     field_delete_field($field);
   }
 
   // Loop over any remaining field instances attached to the 
-  // external_task content type and delete them individually.
-  $instances = field_info_instances('node', 'external_task');
+  // xtask content type and delete them individually.
+  $instances = field_info_instances('node', 'xtask');
   foreach ($instances as $instance_name => $instance) {
     field_delete_instance($instance);
   }
 
   // Delete our content type
-  node_type_delete('external_task');
+  node_type_delete('xtask');
 
   // Purge all field infromation
   field_purge_batch(1000);
