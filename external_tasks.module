@@ -1,0 +1,69 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function external_tasks_menu(){
+  $items['external_tasks/update_task'] = array(
+    'title' => 'External Tasks Update Task Endpoint',
+    'access callback' => TRUE,
+    'page callback' => 'external_tasks_update_task_ep',
+    'page arguments' => array(2),
+    'type' => MENU_CALLBACK,
+  );
+}
+
+/**
+ * Implements hook_node_info().
+ */
+function external_tasks_node_info(){
+  return array(
+    'external_task' => array(
+      'name' => t('External Task'),
+      'base' => 'external_task',
+      'description' => t('An external task. Contains metadata for running the task, and the state of the task.'),
+    )
+  );
+}
+
+/**
+ * Handles result of post to update task endpoint.
+ * $task_token is an access token corresponding to
+ * a specific task. The token is the method of access
+ * control. The token is generated when a task is created.
+ */
+function external_tasks_update_task_ep($task_token){
+  // Get token record from db.
+  // Get the data from the post.
+  // Update task corresponding to the token.
+}
+
+/**
+ * Implements hook_insert().
+ * Creates access token for task.
+ */
+function external_task_insert($node){
+  $token = uniqid('task' . $node->nid);
+  db_insert('external_tasks_tokens') ->fields(array(
+    'token' => $token,
+    'nid' => $node->nid
+  ))->execute();
+
+  $node->external_task_token['und'][0]['value'] = $token;
+}
+
+/**
+ * Implements hook_form().
+ */
+function external_task_form($node, $form_state){
+  return node_content_form($node, $form_state);
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Hides the token field.
+ */
+function external_tasks_form_external_task_node_form_alter(&$form, $form_state, $form_id) {
+  unset($form['external_task_token']);
+}
