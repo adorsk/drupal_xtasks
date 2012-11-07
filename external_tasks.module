@@ -1,10 +1,12 @@
 <?php
 
+define('EXTERNAL_TASKS_UPDATE_EP', 'external_tasks/update_task');
+
 /**
  * Implements hook_menu().
  */
 function external_tasks_menu(){
-  $items['external_tasks/update_task'] = array(
+  $items[EXTERNAL_TASKS_UPDATE_EP] = array(
     'title' => 'External Tasks Update Task Endpoint',
     'access callback' => TRUE,
     'page callback' => 'external_tasks_update_task_ep',
@@ -101,4 +103,60 @@ function external_task_form($node, $form_state){
  */
 function external_tasks_form_external_task_node_form_alter(&$form, $form_state, $form_id) {
   unset($form['external_task_token']);
+}
+
+/**
+ * Runs a task.
+ */
+function external_tasks_run_task($nid){
+  $node = node_load($nid);
+  if (! $node){
+    // HANDLE ERROR HERE.
+  }
+
+  // Get array representation of task.
+  $task = external_tasks_task_to_array($node);
+
+  // Get command from task config.
+  $cmd = $task['config']['command'];
+
+  // Run the command and pass it the task as a JSON string via stdin.
+  $json_task = json_encode($task);
+  $proc = proc_open($cmd, array(array("pipe", "r")), $pipes);
+  if (is_resource($proc)){
+    fwrite($pipes[0], $json_task);
+    fclose($pipes[0]);
+    $ret = proc_close($proc);
+    if ($ret != 0){
+      // HANDLE ERROR.
+    }
+  }
+  else{
+    // HANDLE ERROR.
+  }
+
+}
+
+/**
+ * Get an array representing a task.
+ */
+function external_tasks_task_to_array($node){
+  $task_array = array();
+  $task_attrs = array('data', 'status', 'config');
+  foreach ($task_attrs as $task_attr){
+    $field = $node->{"external_task_$task_attr"};
+    $value = $field[LANGUAGE_NONE][0]['value'];
+    if ($value){
+      $value = json_decode($value, true);
+    }
+    else{
+      $value = array();
+    }
+    $task_array[$task_attr] = $value;
+  }
+  // Add update endpoint to config.
+  $token = $node->external_task_token[LANGUAGE_NONE][0]['value'];
+  $task_array['config']['update_endpoint'] = url(
+    EXTERNAL_TASKS_UPDATE_EP . "/$token", array('absolute' => TRUE));
+  return $task_array;
 }
