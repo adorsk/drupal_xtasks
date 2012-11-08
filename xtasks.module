@@ -13,6 +13,14 @@ function xtasks_menu(){
     'page arguments' => array(2),
     'type' => MENU_CALLBACK,
   );
+
+  $items['xtasks/task_status'] = array(
+    'title' => 'XTasks Task Status',
+    'access callback' => TRUE, // @TODO! CHANGE THIS LATER...
+    'page callback' => '_xtasks_task_status_page',
+    'page arguments' => array(2),
+    'type' => MENU_CALLBACK,
+  );
   return $items;
 }
 
@@ -66,7 +74,7 @@ function xtasks_update_task_ep($token){
   $field_attrs = array('status', 'data');
   foreach($field_attrs as $field_attr){
     if (array_key_exists($field_attr, $data)){
-      $node->{"xtask_$field_attr"} = array(
+      $node->{"xtasks_$field_attr"} = array(
         LANGUAGE_NONE => array(
           array('value' => $data[$field_attr])
         )
@@ -75,12 +83,12 @@ function xtasks_update_task_ep($token){
   }
 
   // If task status is resolved or rejected, remove token.
-  $status = $node->xtask_status[LANGUAGE_NONE][0]['value'];
+  $status = $node->xtasks_status[LANGUAGE_NONE][0]['value'];
   if ($status == 'completed' || $status == 'failed'){
     db_delete('xtasks_tokens')
       ->condition('token', $token)
       ->execute();
-    unset($node->xtask_token[LANGUAGE_NONE][0]['value']);
+    unset($node->xtasks_token[LANGUAGE_NONE][0]['value']);
   }
 
   node_save($node);
@@ -100,7 +108,7 @@ function xtask_insert($node){
     'nid' => $node->nid
   ))->execute();
 
-  $node->xtask_token['und'][0]['value'] = $token;
+  $node->xtasks_token['und'][0]['value'] = $token;
 }
 
 /**
@@ -115,8 +123,8 @@ function xtask_form($node, $form_state){
  *
  * Hides the token field.
  */
-function xtasks_form_xtask_node_form_alter(&$form, $form_state, $form_id) {
-  unset($form['xtask_token']);
+function xtasks_form_xtasks_node_form_alter(&$form, $form_state, $form_id) {
+  unset($form['xtasks_token']);
 }
 
 /**
@@ -158,7 +166,7 @@ function xtasks_task_to_array($node){
   $task_array = array();
   $task_attrs = array('data', 'status', 'config');
   foreach ($task_attrs as $task_attr){
-    $field = $node->{"xtask_$task_attr"};
+    $field = $node->{"xtasks_$task_attr"};
     $value = $field[LANGUAGE_NONE][0]['value'];
     if ($value){
       $value = json_decode($value, true);
@@ -169,8 +177,106 @@ function xtasks_task_to_array($node){
     $task_array[$task_attr] = $value;
   }
   // Add update endpoint to config.
-  $token = $node->xtask_token[LANGUAGE_NONE][0]['value'];
+  $token = $node->xtasks_token[LANGUAGE_NONE][0]['value'];
   $task_array['config']['update_url'] = url(
     XTASKS_UPDATE_EP . "/$token", array('absolute' => TRUE));
+
+  // Add task id.
+  $task_array['id'] = $node->nid;
+
   return $task_array;
+}
+
+/**
+ * View status of a task.
+ */
+function _xtasks_task_status_page($nid){
+  $node = node_load($nid);
+  if (! $node){
+    return MENU_NOT_FOUND;
+  }
+  $status_field = $node->xtasks_status;
+  $status = null;
+  if ($status_field){
+    $status = $status_field[LANGUAGE_NONE][0]['value'];
+  }
+
+  if ($status == 'resolved' || $status == 'failed'){
+    _xtasks_task_status_finished_page($node);
+  }
+  else{
+    // Get or create batch job for monitoring the task.
+    $batch_record = db_query(
+    "SELECT bid, nid FROM {xtasks_batch} WHERE nid= :nid",
+    array(':nid' => $nid))->fetchObject();
+
+    $bid = null;
+    if (! $batch_record){
+      $batch_def = array(
+        'operations' => array(
+          array('_xtasks_monitor_batch_init', array($nid)),
+          array('_xtasks_monitor_batch_op', array($nid))
+        ),
+        'finished' => '_xtasks_monitor_batch_finished',
+      );
+      batch_set($batch_def);
+      $batch = batch_get();
+      batch_process();
+      $bid = $batch['id'];
+      db_insert('xtasks_batch') ->fields(array(
+        'bid' => $bid,
+        'nid' => $nid
+      ))->execute();
+    }
+    else{
+      $bid = $batch_record->bid;
+    }
+    $batch_url = url('batch?op=start&id='.$batch_record->bid);
+    drupal_goto($batch_url);
+  }
+}
+
+function _xtasks_monitor_batch_init($nid, &$context){
+  dpm('init');
+  $context['finished'] = true;
+  $context['message'] = 'Started task monitoring...';
+}
+
+function _xtasks_monitor_batch_op($nid, &$context){
+  // Get task data.
+  $node = node_load($nid);
+  if (! $node){
+    // HANDLE ERROR.
+    return;
+  }
+
+  $message = $node->xtasks_message[LANGUAGE_NONE][0]['value'];
+  $status = $node->xtasks_status[LANGUAGE_NONE][0]['value'];
+
+  /*
+  dpm($status);
+  $context['finished'] = TRUE;
+  return;
+   */
+
+  $context['message'] = $message || '---';
+
+  if ($status == 'resolved'){
+    $context['finished'] = TRUE;
+  }
+  elseif ($status == 'rejected'){
+    throw new Exception('Badness!');
+  }
+  else{
+    $context['finished'] = FALSE;
+  }
+}
+
+function _xtasks_monitor_batch_finished($nid){
+  dpm("done!");
+  drupal_goto();
+}
+
+function _xtasks_task_status_finished_page($node){
+  return "it's done!";
 }
