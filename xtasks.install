@@ -142,6 +142,13 @@ function _xtasks_fields(){
       'cardinality' => 1,
       'type' => 'text',
     ),
+
+    // Callback field.
+    'xtasks_callback' => array(
+      'field_name' => 'xtasks_callback',
+      'cardinality' => 1,
+      'type' => 'text',
+    ),
   );
 }
 

@@ -196,22 +196,25 @@ function _xtasks_task_status_page($nid){
   if (! $node){
     return MENU_NOT_FOUND;
   }
-  $status_field = $node->xtasks_status;
-  $status = null;
-  if ($status_field){
-    $status = $status_field[LANGUAGE_NONE][0]['value'];
-  }
-  $task_progress_field = $node->xtasks_progress;
-  $task_progress = null;
-  if ($task_progress_field){
-    $task_progress = $task_progress_field[LANGUAGE_NONE][0]['value'];
+
+  $field_names = array('status', 'progress');
+  $field_values = array();
+  foreach ($field_names as $field_name){
+    $field = $node->{"xtasks_$field_name"};
+    if ($field){
+      $field_values[$field_name] = $field[LANGUAGE_NONE][0]['value'];
+    }
+    else{
+      $field_values[$field_name] = null;
+    }
   }
 
-  if (
-    $status == 'resolved' || $status == 'failed'
-    || $task_progress >= 100
-  ){
-    return _xtasks_task_status_finished_page($nid);
+  $status = $field_values['status'];
+  $progress = $field_values['progress'];
+
+  if ($status == 'resolved' || $status == 'failed' || $progress >= 100){
+      $callback = _xtasks_get_task_callback($node);
+      return $callback($node);
   }
   else{
     // Get or create batch job for monitoring the task.
@@ -250,6 +253,18 @@ function _xtasks_task_status_page($nid){
       )));
     return;
   }
+}
+
+function _xtasks_get_task_callback($node){
+  $callback = null;
+  $field = $node->xtasks_callback;
+  if ($field){
+    $callback = $field[LANGUAGE_NONE][0]['value'];
+  }
+  if (! $callback){
+    $callback = '_xtasks_task_status_default_finished_page';
+  }
+  return $callback;
 }
 
 function _xtasks_monitor_batch_init($nid, &$context){
@@ -342,6 +357,6 @@ function _xtasks_monitor_batch_finished($success, $results, $ops){
   drupal_goto(XTASKS_STATUS_EP . "/$nid");
 }
 
-function _xtasks_task_status_finished_page($node){
+function _xtasks_task_status_default_finished_page($node){
   return "it's done!";
 }
