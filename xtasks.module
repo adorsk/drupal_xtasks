@@ -165,15 +165,16 @@ function xtasks_run_task($nid){
  */
 function xtasks_task_to_array($node){
   $task_array = array();
-  $task_attrs = array('data', 'status', 'config');
+  $task_attrs = array('data', 'status', 'config', 'errors', 'progress');
   foreach ($task_attrs as $task_attr){
+    $value = array();
     $field = $node->{"xtasks_$task_attr"};
-    $value = $field[LANGUAGE_NONE][0]['value'];
-    if ($value){
-      $value = json_decode($value, true);
-    }
-    else{
-      $value = array();
+    if ($field){
+      $raw_value = $field[LANGUAGE_NONE][0]['value'];
+      $value = json_decode($raw_value, true);
+      if (! $value){
+        $value = $raw_value;
+      }
     }
     $task_array[$task_attr] = $value;
   }
@@ -197,20 +198,9 @@ function _xtasks_task_status_page($nid){
     return MENU_NOT_FOUND;
   }
 
-  $field_names = array('status', 'progress');
-  $field_values = array();
-  foreach ($field_names as $field_name){
-    $field = $node->{"xtasks_$field_name"};
-    if ($field){
-      $field_values[$field_name] = $field[LANGUAGE_NONE][0]['value'];
-    }
-    else{
-      $field_values[$field_name] = null;
-    }
-  }
-
-  $status = $field_values['status'];
-  $progress = $field_values['progress'];
+  $task_array = xtasks_task_to_array($node);
+  $status = $task_array['status'];
+  $progress = $task_array['progress'];
 
   if ($status == 'resolved' || $status == 'failed' || $progress >= 100){
       $callback = _xtasks_get_task_callback($node);
@@ -343,20 +333,34 @@ function _xtasks_monitor_batch_finished($success, $results, $ops){
       ->condition('bid', $results['bid'])
       ->execute();
 
-  if ($success) {
-    $message = "Task finished successfully.";
+  if (! $success){
+    // HANDLE ERROR HERE.
   }
-  else {
-    $message = t('Task did not finish successfully. There was an error.');
-  }
-  drupal_set_message($message);
-
-  // Providing data for the redirected page is done through $_SESSION.
-  $_SESSION['task_data'] = array();
 
   drupal_goto(XTASKS_STATUS_EP . "/$nid");
 }
 
 function _xtasks_task_status_default_finished_page($node){
-  return "it's done!";
+  $task_array = xtasks_task_to_array($node);
+
+  if ($task_array['status'] == 'rejected'){
+    foreach ($task_array['errors'] as $error){
+      drupal_set_message($error, 'error');
+    }
+    $text = t("There were errors during task execution."); 
+    return array('#markup' => "<div class=\"message error\">$text</div>");
+  }
+  else{
+    if ($task_array['errors']){
+      foreach ($task_array['errors'] as $error){
+        drupal_set_message($error, 'warning');
+      }
+    }
+    $text = t("Task completed successfully.");
+    return array('#markup' => "<div> $text</div>");
+  }
+}
+
+function _xtasks_task_status_show_task_errors($node){
+  $task_array = xtasks_task_to_array($node);
 }
