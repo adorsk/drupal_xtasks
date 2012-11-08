@@ -1,6 +1,7 @@
 <?php
 
 define('XTASKS_UPDATE_EP', 'xtasks/update_task');
+define('XTASKS_STATUS_EP', 'xtasks/task_status');
 
 /**
  * Implements hook_menu().
@@ -14,7 +15,7 @@ function xtasks_menu(){
     'type' => MENU_CALLBACK,
   );
 
-  $items['xtasks/task_status'] = array(
+  $items[XTASKS_STATUS_EP] = array(
     'title' => 'XTasks Task Status',
     'access callback' => TRUE, // @TODO! CHANGE THIS LATER...
     'page callback' => '_xtasks_task_status_page',
@@ -210,7 +211,7 @@ function _xtasks_task_status_page($nid){
     $status == 'resolved' || $status == 'failed'
     || $task_progress >= 100
   ){
-    return _xtasks_task_status_finished_page($node);
+    return _xtasks_task_status_finished_page($nid);
   }
   else{
     // Get or create batch job for monitoring the task.
@@ -227,7 +228,7 @@ function _xtasks_task_status_page($nid){
       // Add operations to represent completion for 1-100%.
       // This is a trick to report on task progress.
       for ($i = 1; $i < 100; $i++){
-        $operations[] = array('_xtasks_monitor_batch_op', array($nid, $i));
+        $operations[] = array('_xtasks_monitor_batch_op', array($i));
       }
 
       $batch_def = array(
@@ -338,7 +339,7 @@ function _xtasks_monitor_batch_finished($success, $results, $ops){
   // Providing data for the redirected page is done through $_SESSION.
   $_SESSION['task_data'] = array();
 
-  drupal_goto();
+  drupal_goto(XTASKS_STATUS_EP . "/$nid");
 }
 
 function _xtasks_task_status_finished_page($node){
