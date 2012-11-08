@@ -200,9 +200,17 @@ function _xtasks_task_status_page($nid){
   if ($status_field){
     $status = $status_field[LANGUAGE_NONE][0]['value'];
   }
+  $task_progress_field = $node->xtasks_progress;
+  $task_progress = null;
+  if ($task_progress_field){
+    $task_progress = $task_progress_field[LANGUAGE_NONE][0]['value'];
+  }
 
-  if ($status == 'resolved' || $status == 'failed'){
-    _xtasks_task_status_finished_page($node);
+  if (
+    $status == 'resolved' || $status == 'failed'
+    || $task_progress >= 100
+  ){
+    return _xtasks_task_status_finished_page($node);
   }
   else{
     // Get or create batch job for monitoring the task.
@@ -211,7 +219,7 @@ function _xtasks_task_status_page($nid){
     array(':nid' => $nid))->fetchObject();
 
     $bid = null;
-    if (! $batch_record){
+    if (empty($batch_record)){
       // Initialize operations w/ init op.
       $operations = array(
         array('_xtasks_monitor_batch_init', array($nid)),
@@ -229,42 +237,60 @@ function _xtasks_task_status_page($nid){
       batch_set($batch_def);
       $batch = batch_get();
       batch_process();
-      $bid = $batch['id'];
-      db_insert('xtasks_batch') ->fields(array(
-        'bid' => $bid,
-        'nid' => $nid
-      ))->execute();
+      return;
     }
     else{
       $bid = $batch_record->bid;
     }
-    $batch_url = url('batch?op=start&id='.$batch_record->bid);
-    drupal_goto($batch_url);
+    drupal_goto('batch', array(
+      'query' => array(
+        'op' => 'start',
+        'id' => $batch_record->bid
+      )));
+    return;
   }
 }
 
 function _xtasks_monitor_batch_init($nid, &$context){
-  dpm('init');
-  $context['finished'] = true;
+  $batch = batch_get();
+
+  db_insert('xtasks_batch') ->fields(array(
+    'bid' => $batch['id'],
+    'nid' => $nid
+  ))->execute();
+
+  $context['results']['bid'] = $batch['id'];
   $context['message'] = 'Started task monitoring...';
-  $context['sandbox'] = array();
+  $context['results']['task_nid'] = $nid;
+  $context['finished'] = 1;
 }
 
-function _xtasks_monitor_batch_op($nid, $op_progress, &$context){
-  //sleep(.1);
+function _xtasks_monitor_batch_op($op_progress, &$context){
   // Get task data.
+  $nid = $context['results']['task_nid'];
   $node = node_load($nid);
   if (! $node){
-    // HANDLE ERROR.
-    return;
+    throw new Exception("Could not load task with id '$nid'");
   }
 
   $task_progress = $node->xtasks_progress[LANGUAGE_NONE][0]['value'];
   $status = $node->xtasks_status[LANGUAGE_NONE][0]['value'];
   $message = $node->xtasks_message[LANGUAGE_NONE][0]['value'];
 
-  if ($status == 'rejected'){
-    throw new Exception('Badness!');
+  if (! $task_progress){
+    $task_progress = 0;
+    if (! $message){
+      $message = t("Waiting for task to begin...");
+    }
+  }
+
+  if (! is_numeric($task_progress)){
+    throw new Exception("Invalid value for task progress. Value was '$task_progress'");
+  }
+
+  // Skip to the end if resolved or rejected.
+  if ($status == 'resolved' || $status == 'rejected'){
+    $node->xtasks_progress[LANGUAGE_NONE][0]['value'] = 100;
   }
 
   if ($op_progress < $task_progress){
@@ -288,12 +314,30 @@ function _xtasks_monitor_batch_op($nid, $op_progress, &$context){
 
   // Wait for task to catch up before moving to next op.
   // Set message.
-  //$context['message'] = $message || '---';
-  $context['message'] = "Yo! $op_progress " . microtime();
+  $context['message'] = $message;
   $context['finished'] = 0;
 }
 
-function _xtasks_monitor_batch_finished($nid){
+function _xtasks_monitor_batch_finished($success, $results, $ops){
+  $nid = $results['task_nid'];
+  $node = node_load($nid);
+
+  // Remove xtask_batch record
+  db_delete('xtasks_batch')
+      ->condition('bid', $results['bid'])
+      ->execute();
+
+  if ($success) {
+    $message = "Task finished successfully.";
+  }
+  else {
+    $message = t('Task did not finish successfully. There was an error.');
+  }
+  drupal_set_message($message);
+
+  // Providing data for the redirected page is done through $_SESSION.
+  $_SESSION['task_data'] = array();
+
   drupal_goto();
 }
 
