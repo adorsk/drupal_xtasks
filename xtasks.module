@@ -167,7 +167,7 @@ function xtasks_task_to_array($node){
   $task_array = array();
   $task_attrs = array('data', 'status', 'config', 'errors', 'progress');
   foreach ($task_attrs as $task_attr){
-    $value = array();
+    $value = null;
     $field = $node->{"xtasks_$task_attr"};
     if ($field){
       $raw_value = $field[LANGUAGE_NONE][0]['value'];
@@ -202,7 +202,7 @@ function _xtasks_task_status_page($nid){
   $status = $task_array['status'];
   $progress = $task_array['progress'];
 
-  if ($status == 'resolved' || $status == 'failed' || $progress >= 100){
+  if ($status == 'resolved' || $status == 'rejected' || $progress >= 100){
       $callback = _xtasks_get_task_callback($node);
       return $callback($node);
   }
@@ -343,22 +343,25 @@ function _xtasks_monitor_batch_finished($success, $results, $ops){
 function _xtasks_task_status_default_finished_page($node){
   $task_array = xtasks_task_to_array($node);
 
+  $message_type = "status";
+
   if ($task_array['status'] == 'rejected'){
+    drupal_set_message("There were errors during task execution", 'error');
     foreach ($task_array['errors'] as $error){
       drupal_set_message($error, 'error');
     }
-    $text = t("There were errors during task execution."); 
-    return array('#markup' => "<div class=\"message error\">$text</div>");
+    $message_type = "error";
+    $message_text = t("There were errors during task execution."); 
   }
   else{
+    drupal_set_message("Task completed successfully.");
     if ($task_array['errors']){
       foreach ($task_array['errors'] as $error){
         drupal_set_message($error, 'warning');
       }
     }
-    $text = t("Task completed successfully.");
-    return array('#markup' => "<div> $text</div>");
   }
+  return '';
 }
 
 function _xtasks_task_status_show_task_errors($node){
