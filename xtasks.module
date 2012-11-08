@@ -212,11 +212,18 @@ function _xtasks_task_status_page($nid){
 
     $bid = null;
     if (! $batch_record){
+      // Initialize operations w/ init op.
+      $operations = array(
+        array('_xtasks_monitor_batch_init', array($nid)),
+      );
+      // Add operations to represent completion for 1-100%.
+      // This is a trick to report on task progress.
+      for ($i = 1; $i < 100; $i++){
+        $operations[] = array('_xtasks_monitor_batch_op', array($nid, $i));
+      }
+
       $batch_def = array(
-        'operations' => array(
-          array('_xtasks_monitor_batch_init', array($nid)),
-          array('_xtasks_monitor_batch_op', array($nid))
-        ),
+        'operations' => $operations,
         'finished' => '_xtasks_monitor_batch_finished',
       );
       batch_set($batch_def);
@@ -240,9 +247,11 @@ function _xtasks_monitor_batch_init($nid, &$context){
   dpm('init');
   $context['finished'] = true;
   $context['message'] = 'Started task monitoring...';
+  $context['sandbox'] = array();
 }
 
-function _xtasks_monitor_batch_op($nid, &$context){
+function _xtasks_monitor_batch_op($nid, $op_progress, &$context){
+  //sleep(.1);
   // Get task data.
   $node = node_load($nid);
   if (! $node){
@@ -250,30 +259,41 @@ function _xtasks_monitor_batch_op($nid, &$context){
     return;
   }
 
-  $message = $node->xtasks_message[LANGUAGE_NONE][0]['value'];
+  $task_progress = $node->xtasks_progress[LANGUAGE_NONE][0]['value'];
   $status = $node->xtasks_status[LANGUAGE_NONE][0]['value'];
+  $message = $node->xtasks_message[LANGUAGE_NONE][0]['value'];
 
-  /*
-  dpm($status);
-  $context['finished'] = TRUE;
-  return;
-   */
-
-  $context['message'] = $message || '---';
-
-  if ($status == 'resolved'){
-    $context['finished'] = TRUE;
-  }
-  elseif ($status == 'rejected'){
+  if ($status == 'rejected'){
     throw new Exception('Badness!');
   }
-  else{
-    $context['finished'] = FALSE;
+
+  if ($op_progress < $task_progress){
+
+    // If skipping, return w/out setting message.
+    if ($context['results']['skip']){
+      $context['finished'] = 1;
+      return;
+    }
+    // Otherwise start skipping.
+    if (! $context['results']['skip']){
+      $context['results']['skip'] = TRUE;
+      $cur_progress = $op_progress;
+      while ($cur_progress < $task_progress){
+        list($progress, $message) = _batch_process();
+        $cur_progress = $progress;
+      }
+      $context['results']['skip'] = FALSE;
+    }
   }
+
+  // Wait for task to catch up before moving to next op.
+  // Set message.
+  //$context['message'] = $message || '---';
+  $context['message'] = "Yo! $op_progress " . microtime();
+  $context['finished'] = 0;
 }
 
 function _xtasks_monitor_batch_finished($nid){
-  dpm("done!");
   drupal_goto();
 }
 

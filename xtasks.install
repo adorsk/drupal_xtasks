@@ -135,6 +135,13 @@ function _xtasks_fields(){
       'cardinality' => 1,
       'type' => 'text',
     ),
+
+    // Progress field.
+    'xtasks_progress' => array(
+      'field_name' => 'xtasks_progress',
+      'cardinality' => 1,
+      'type' => 'text',
+    ),
   );
 }
 
