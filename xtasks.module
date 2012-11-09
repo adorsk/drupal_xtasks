@@ -138,26 +138,42 @@ function xtasks_run_task($nid){
   }
 
   // Get array representation of task.
-  $task = xtasks_task_to_array($node);
+  $task_array = xtasks_task_to_array($node);
 
   // Get command from task config.
-  $cmd = $task['config']['command'];
+  $cmd = $task_array['config']['command'];
 
   // Run the command and pass it the task as a JSON string via stdin.
-  $json_task = json_encode($task);
-  $proc = proc_open($cmd, array(array("pipe", "r")), $pipes);
-  if (is_resource($proc)){
-    fwrite($pipes[0], $json_task);
-    fclose($pipes[0]);
-    $ret = proc_close($proc);
-    if ($ret != 0){
-      // HANDLE ERROR.
+  $json_task = json_encode($task_array);
+  try {
+    $descriptorspec = array(
+      array("pipe", "r"), // STDIN
+      array("pipe", "w"), // STDOUT
+      array("pipe", "w"), // STDERR
+    );
+    $proc = proc_open($cmd, $descriptorspec, $pipes);
+
+    if (is_resource($proc)){
+      fwrite($pipes[0], $json_task);
+      fclose($pipes[0]);
+      $stdout = stream_get_contents($pipes[1]);
+      fclose($pipes[1]);
+      $stderr = stream_get_contents($pipes[2]);
+      fclose($pipes[2]);
+      $ret = proc_close($proc);
+      if ($ret != 0){
+        throw new Exception("Error starting task, stderr was '$stderr'");
+      }
+    }
+    else{
+      throw new Exception("Could not run command '$cmd'");
     }
   }
-  else{
-    // HANDLE ERROR.
+  catch (Exception $e){
+    $node->xtasks_status[LANGUAGE_NONE][0]['value'] = 'rejected';
+    $node->xtasks_errors[LANGUAGE_NONE][0]['value'] = json_encode(array($e->getMessage()));
+    node_save($node);
   }
-
 }
 
 /**

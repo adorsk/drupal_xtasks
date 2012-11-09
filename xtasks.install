@@ -144,6 +144,7 @@ function _xtasks_fields(){
     ),
 
     // Callback field.
+    // @TODO: put this in config!
     'xtasks_callback' => array(
       'field_name' => 'xtasks_callback',
       'cardinality' => 1,
