@@ -72,12 +72,13 @@ function xtasks_update_task_ep($token){
   if (! $node){
     return MENU_NOT_FOUND;
   }
-  $field_attrs = array('status', 'data');
+  $field_attrs = array('status', 'data', 'errors', 'progress', 'message');
   foreach($field_attrs as $field_attr){
     if (array_key_exists($field_attr, $data)){
+      $value = is_string($data[$field_attr]) ? $data[$field_attr] : json_encode($data[$field_attr]);
       $node->{"xtasks_$field_attr"} = array(
         LANGUAGE_NONE => array(
-          array('value' => $data[$field_attr])
+          array('value' => $value)
         )
       );
     }
@@ -191,7 +192,7 @@ function xtasks_task_to_array($node){
     if ($field){
       $raw_value = $field[LANGUAGE_NONE][0]['value'];
       $value = json_decode($raw_value, true);
-      if (! $value){
+      if (is_null($value)){
         $value = $raw_value;
       }
     }
@@ -374,10 +375,8 @@ function _xtasks_task_status_default_finished_page($node){
   }
   else{
     drupal_set_message("Task completed successfully.");
-    if ($task_array['errors']){
-      foreach ($task_array['errors'] as $error){
-        drupal_set_message($error, 'warning');
-      }
+    foreach ($task_array['errors'] as $error){
+      drupal_set_message($error, 'warning');
     }
   }
   return '';

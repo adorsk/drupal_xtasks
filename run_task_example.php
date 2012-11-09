@@ -4,6 +4,10 @@
  * This script would be executed by drush.
  */
 
+// Set base url.
+global $base_url;
+$base_url = 'http://mydomain.com/site_basepath';
+
 // Create task node.
 $node = new stdClass();
 $node->type = 'xtask';
