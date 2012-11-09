@@ -131,7 +131,7 @@ function xtasks_form_xtasks_node_form_alter(&$form, $form_state, $form_id) {
 /**
  * Runs a task.
  */
-function xtasks_run_task($nid){
+function xtasks_run_task($nid, $debug=FALSE){
   $node = node_load($nid);
   if (! $node){
     // HANDLE ERROR HERE.
@@ -170,6 +170,9 @@ function xtasks_run_task($nid){
     }
   }
   catch (Exception $e){
+    if ($debug){
+      error_log("err is: " . $e->getMessage());
+    }
     $node->xtasks_status[LANGUAGE_NONE][0]['value'] = 'rejected';
     $node->xtasks_errors[LANGUAGE_NONE][0]['value'] = json_encode(array($e->getMessage()));
     node_save($node);

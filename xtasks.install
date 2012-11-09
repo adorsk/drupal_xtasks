@@ -103,7 +103,7 @@ function xtasks_install() {
  * Define fields.
  */
 function _xtasks_fields(){
-  return array(
+  $fields = array(
     // Token field.
     'xtasks_token' => array(
       'field_name' => 'xtasks_token',
@@ -158,6 +158,14 @@ function _xtasks_fields(){
       'type' => 'text',
     ),
   );
+
+  // Make certain fields bigger.
+  $big_fields = array('config', 'errors', 'data', 'message');
+  foreach ($big_fields as $big_field){
+    $fields["xtasks_" . $big_field]['type'] = 'text_long';
+  }
+
+  return $fields;
 }
 
 /**
