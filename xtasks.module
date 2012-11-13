@@ -385,3 +385,29 @@ function _xtasks_task_status_default_finished_page($node){
 function _xtasks_task_status_show_task_errors($node){
   $task_array = xtasks_task_to_array($node);
 }
+
+/**
+ * Create a task from an array.
+ */
+function xtasks_create_xtask($task_def){
+  $node = new stdClass();
+  $node->type = 'xtask';
+  node_object_prepare($node);
+  $node->language = LANGUAGE_NONE;LANGUAGE_NONE;LANGUAGE_NONE;LANGUAGE_NONE;
+
+  //$node->title = $task_def['title'];
+  $node->title = 'Task Title';
+  $config = $task_def['config'];
+  $node->xtasks_config[LANGUAGE_NONE][0]['value'] = json_encode($config);
+  node_save($node);
+
+  return $node;
+}
+
+/**
+ * Get url for task's status page.
+ */
+function xtasks_url_for_task_status_page($nid, $options = array()){
+  return url(XTASKS_STATUS_EP . '/' . $nid, $options);
+}
+
