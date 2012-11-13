@@ -67,12 +67,14 @@ function xtasks_update_task_ep($token){
     // Do 400 Error here.
   }
 
-  // Update task with posted data.
+  // Load task node.
   $node = node_load($token_record->nid);
   if (! $node){
     return MENU_NOT_FOUND;
   }
-  $field_attrs = array('status', 'data', 'errors', 'progress', 'message');
+
+  // Update task with posted data.
+  $field_attrs = _xtasks_task_attrs();
   foreach($field_attrs as $field_attr){
     if (array_key_exists($field_attr, $data)){
       $value = is_string($data[$field_attr]) ? $data[$field_attr] : json_encode($data[$field_attr]);
@@ -84,13 +86,22 @@ function xtasks_update_task_ep($token){
     }
   }
 
-  // If task status is resolved or rejected, remove token.
+  // If task status is resolved or rejected, remove token
+  // and call appropriate callback if given.
   $status = $node->xtasks_status[LANGUAGE_NONE][0]['value'];
   if ($status == 'completed' || $status == 'failed'){
     db_delete('xtasks_tokens')
       ->condition('token', $token)
       ->execute();
     unset($node->xtasks_token[LANGUAGE_NONE][0]['value']);
+
+    $callback_field = $node->{"xtasks_" . $status . "_callback"};
+    if ($callback_field){
+      $callback = $callback_field[LANGUAGE_NONE][0]['value'];
+      if ($callback){
+        $callback($node);
+      }
+    }
   }
 
   node_save($node);
@@ -181,15 +192,22 @@ function xtasks_run_task($nid, $debug=FALSE){
 }
 
 /**
+ * Define list of task attributes.
+ */
+function _xtasks_task_attrs(){
+  return array('message', 'data', 'status', 'config', 'errors', 'progress', 'completed_callback', 'failed_callback', 'status_callback');
+}
+
+/**
  * Get an array representing a task.
  */
 function xtasks_task_to_array($node){
   $task_array = array();
-  $task_attrs = array('data', 'status', 'config', 'errors', 'progress');
+  $task_attrs = _xtasks_task_attrs();
   foreach ($task_attrs as $task_attr){
     $value = null;
     $field = $node->{"xtasks_$task_attr"};
-    if ($field){
+    if (isset($field[LANGUAGE_NONE][0]['value'])){
       $raw_value = $field[LANGUAGE_NONE][0]['value'];
       $value = json_decode($raw_value, true);
       if (is_null($value)){
@@ -209,6 +227,31 @@ function xtasks_task_to_array($node){
   return $task_array;
 }
 
+function xtasks_array_to_task($array){
+  $node = new stdClass();
+  $node->type = 'xtask';
+  node_object_prepare($node);
+  $node->language = LANGUAGE_NONE;
+
+  //$node->title = $task_def['title'];
+  $node->title = 'Task Title';
+
+  $task_attrs = _xtasks_task_attrs();
+  foreach ($task_attrs as $task_attr){
+    if (isset($array[$task_attr])){
+      $value = $array[$task_attr];
+      if (is_array($value)){
+        $value = json_encode($value);
+      }
+      $node->{"xtasks_$task_attr"}[LANGUAGE_NONE][0]['value'] = $value;
+    }
+  }
+
+  node_save($node);
+
+  return $node;
+}
+
 /**
  * View status of a task.
  */
@@ -223,7 +266,7 @@ function _xtasks_task_status_page($nid){
   $progress = $task_array['progress'];
 
   if ($status == 'resolved' || $status == 'rejected' || $progress >= 100){
-      $callback = _xtasks_get_task_callback($node);
+      $callback = _xtasks_get_status_callback($node);
       return $callback($node);
   }
   else{
@@ -265,14 +308,14 @@ function _xtasks_task_status_page($nid){
   }
 }
 
-function _xtasks_get_task_callback($node){
+function _xtasks_get_status_callback($node){
   $callback = null;
-  $field = $node->xtasks_callback;
+  $field = $node->xtasks_status_callback;
   if ($field){
     $callback = $field[LANGUAGE_NONE][0]['value'];
   }
   if (! $callback){
-    $callback = '_xtasks_task_status_default_finished_page';
+    $callback = 'xtasks_task_status_default_finished_page';
   }
   return $callback;
 }
@@ -299,9 +342,11 @@ function _xtasks_monitor_batch_op($op_progress, &$context){
     throw new Exception("Could not load task with id '$nid'");
   }
 
-  $task_progress = $node->xtasks_progress[LANGUAGE_NONE][0]['value'];
-  $status = $node->xtasks_status[LANGUAGE_NONE][0]['value'];
-  $message = $node->xtasks_message[LANGUAGE_NONE][0]['value'];
+  $task_array = xtasks_task_to_array($node);
+
+  $task_progress = $task_array['progress'];
+  $status = $task_array['status'];
+  $message = $task_array['message'];
 
   if (! $task_progress){
     $task_progress = 0;
@@ -322,12 +367,12 @@ function _xtasks_monitor_batch_op($op_progress, &$context){
   if ($op_progress < $task_progress){
 
     // If skipping, return w/out setting message.
-    if ($context['results']['skip']){
+    $skipping = isset($context['results']['skip']) ? $context['results']['skip'] : FALSE;
+    if ($skipping){
       $context['finished'] = 1;
       return;
     }
-    // Otherwise start skipping.
-    if (! $context['results']['skip']){
+    else{
       $context['results']['skip'] = TRUE;
       $cur_progress = $op_progress;
       while ($cur_progress < $task_progress){
@@ -360,7 +405,7 @@ function _xtasks_monitor_batch_finished($success, $results, $ops){
   drupal_goto(XTASKS_STATUS_EP . "/$nid");
 }
 
-function _xtasks_task_status_default_finished_page($node){
+function xtasks_task_status_default_finished_page($node){
   $task_array = xtasks_task_to_array($node);
 
   $message_type = "status";
@@ -384,24 +429,6 @@ function _xtasks_task_status_default_finished_page($node){
 
 function _xtasks_task_status_show_task_errors($node){
   $task_array = xtasks_task_to_array($node);
-}
-
-/**
- * Create a task from an array.
- */
-function xtasks_create_xtask($task_def){
-  $node = new stdClass();
-  $node->type = 'xtask';
-  node_object_prepare($node);
-  $node->language = LANGUAGE_NONE;LANGUAGE_NONE;LANGUAGE_NONE;LANGUAGE_NONE;
-
-  //$node->title = $task_def['title'];
-  $node->title = 'Task Title';
-  $config = $task_def['config'];
-  $node->xtasks_config[LANGUAGE_NONE][0]['value'] = json_encode($config);
-  node_save($node);
-
-  return $node;
 }
 
 /**
