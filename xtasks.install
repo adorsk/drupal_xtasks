@@ -153,16 +153,16 @@ function _xtasks_fields(){
 
     // Task completion callback.
     // @TODO: put this in config?
-    'xtasks_completed_callback' => array(
-      'field_name' => 'xtasks_completed_callback',
+    'xtasks_resolved_callback' => array(
+      'field_name' => 'xtasks_resolved_callback',
       'cardinality' => 1,
       'type' => 'text',
     ),
 
     // Task fail callback.
     // @TODO: put this in config?
-    'xtasks_failed_callback' => array(
-      'field_name' => 'xtasks_failed_callback',
+    'xtasks_rejected_callback' => array(
+      'field_name' => 'xtasks_rejected_callback',
       'cardinality' => 1,
       'type' => 'text',
     ),
