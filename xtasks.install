@@ -145,8 +145,8 @@ function _xtasks_fields(){
 
     // Status page callback field.
     // @TODO: put this in config?
-    'xtasks_status_callback' => array(
-      'field_name' => 'xtasks_status_callback',
+    'xtasks_status_page_callback' => array(
+      'field_name' => 'xtasks_status_page_callback',
       'cardinality' => 1,
       'type' => 'text',
     ),

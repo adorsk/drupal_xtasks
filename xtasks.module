@@ -87,7 +87,7 @@ function xtasks_update_task_ep($token){
   }
 
   // If task status is resolved or rejected, remove token
-  // and call appropriate callback if given.
+  // and call appropriate status page callback if given.
   $status = $node->xtasks_status[LANGUAGE_NONE][0]['value'];
   if ($status == 'resolved' || $status == 'rejected'){
     db_delete('xtasks_tokens')
@@ -98,7 +98,6 @@ function xtasks_update_task_ep($token){
     $callback_field = $node->{"xtasks_" . $status . "_callback"};
     if ($callback_field && isset($callback_field[LANGUAGE_NONE][0]['value'])){
       $callback = $callback_field[LANGUAGE_NONE][0]['value'];
-      watchdog('debug', "callback is: " . $callback);
       if ($callback){
         $callback($node);
       }
@@ -265,7 +264,7 @@ function _xtasks_task_status_page($nid){
   $progress = $task_array['progress'];
 
   if ($status == 'resolved' || $status == 'rejected'){
-      $callback = _xtasks_get_status_callback($node);
+      $callback = _xtasks_get_status_page_callback($node);
       return $callback($node);
   }
   else{
@@ -307,9 +306,9 @@ function _xtasks_task_status_page($nid){
   }
 }
 
-function _xtasks_get_status_callback($node){
+function _xtasks_get_status_page_callback($node){
   $callback = null;
-  $field = $node->xtasks_status_callback;
+  $field = $node->xtasks_status_page_callback;
   if ($field){
     $callback = $field[LANGUAGE_NONE][0]['value'];
   }
@@ -445,4 +444,3 @@ function _xtasks_task_status_show_task_errors($node){
 function xtasks_url_for_task_status_page($nid, $options = array()){
   return url(XTASKS_STATUS_EP . '/' . $nid, $options);
 }
-
