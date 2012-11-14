@@ -280,9 +280,9 @@ function _xtasks_task_status_page($nid){
       $operations = array(
         array('_xtasks_monitor_batch_init', array($nid)),
       );
-      // Add operations to represent completion for 1-100%.
+      // Add operations to represent completion for 2-100%.
       // This is a trick to report on task progress.
-      for ($i = 1; $i < 100; $i++){
+      for ($i = 2; $i <= 100; $i++){
         $operations[] = array('_xtasks_monitor_batch_op', array($i));
       }
 
@@ -334,6 +334,18 @@ function _xtasks_monitor_batch_init($nid, &$context){
 }
 
 function _xtasks_monitor_batch_op($op_progress, &$context){
+  // If skipping, return w/out setting message.
+  if (isset($context['results']['skip_to'])){
+    // Wait on the final operation (op_progress == 100) to check resolution.
+    if ($op_progress <= min($context['results']['skip_to'], 99)){
+      $context['finished'] = 1;
+      return;
+    }
+    else{
+      $context['results']['skip_to'] = null;
+    }
+  }
+
   // Get task data.
   $nid = $context['results']['task_nid'];
   $node = node_load($nid);
@@ -341,49 +353,47 @@ function _xtasks_monitor_batch_op($op_progress, &$context){
     throw new Exception("Could not load task with id '$nid'");
   }
 
-  $task_progress = $node->xtasks_progress[LANGUAGE_NONE][0]['value'];
   $status = $node->xtasks_status[LANGUAGE_NONE][0]['value'];
+
+  // Set progress to 100 if completed.
+  $completed = ($status == 'resolved' || $status == 'rejected');
+  if ($completed){
+    $node->xtasks_progress[LANGUAGE_NONE][0]['value'] = 100;
+  }
+
+  $task_progress = $node->xtasks_progress[LANGUAGE_NONE][0]['value'];
   $message = $node->xtasks_message[LANGUAGE_NONE][0]['value'];
 
-  if (! $task_progress){
+  // Handle progress value.
+  if (! isset($task_progress)){
     $task_progress = 0;
     if (! $message){
       $message = t("Waiting for task to begin...");
     }
   }
-
-  if (! is_numeric($task_progress)){
+  else if(! is_numeric($task_progress)){
     throw new Exception("Invalid value for task progress. Value was '$task_progress'");
   }
 
-  // Skip to the end if resolved or rejected.
-  if ($status == 'resolved' || $status == 'rejected'){
-    $node->xtasks_progress[LANGUAGE_NONE][0]['value'] = 100;
-  }
-
+  // Start skipping if behind task progress.
   if ($op_progress < $task_progress){
-
-    // If skipping, return w/out setting message.
-    if ($context['results']['skip']){
-      $context['finished'] = 1;
-      return;
-    }
-    // Otherwise start skipping.
-    else{
-      $context['results']['skip'] = TRUE;
-      $cur_progress = $op_progress;
-      while ($cur_progress < $task_progress){
-        list($progress, $message) = _batch_process();
-        $cur_progress = $progress;
-      }
-      $context['results']['skip'] = FALSE;
-    }
+    $context['results']['skip_to'] = min($task_progress, 100);
+    $context['finished'] = 1;
+    return;
+  }
+  // Otherwise, if at 100%, wait for task to resolve.
+  else if ($op_progress == 100 && $completed){
+    $context['finished'] = 1;
+    $context['message'] = $message;
+    return;
+  }
+  // Otherwise, wait for task to catch up.
+  else{
+    $context['message'] = $message;
+    $context['finished'] = 0;
+    return;
   }
 
-  // Wait for task to catch up before moving to next op.
-  // Set message.
-  $context['message'] = $message;
-  $context['finished'] = 0;
 }
 
 
