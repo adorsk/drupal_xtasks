@@ -195,7 +195,7 @@ function xtasks_run_task($nid, $debug=FALSE){
  * Define list of task attributes.
  */
 function _xtasks_task_attrs(){
-  return array('message', 'data', 'status', 'config', 'errors', 'progress', 'resolved_callback', 'rejected_callback', 'status_callback');
+  return array('message', 'data', 'status', 'config', 'errors', 'progress', 'resolved_callback', 'rejected_callback', 'completed_page_callback');
 }
 
 /**
@@ -216,10 +216,12 @@ function xtasks_task_to_array($node){
     }
     $task_array[$task_attr] = $value;
   }
-  // Add update endpoint to config.
-  $token = $node->xtasks_token[LANGUAGE_NONE][0]['value'];
-  $task_array['config']['update_url'] = url(
-    XTASKS_UPDATE_EP . "/$token", array('absolute' => TRUE));
+  // Add update endpoint to config if token is set.
+  if (isset($node->xtasks_token[LANGUAGE_NONE])){
+    $token = $node->xtasks_token[LANGUAGE_NONE][0]['value'];
+    $task_array['config']['update_url'] = url(
+      XTASKS_UPDATE_EP . "/$token", array('absolute' => TRUE));
+  }
 
   // Add task id.
   $task_array['id'] = $node->nid;
@@ -264,8 +266,31 @@ function _xtasks_task_status_page($nid){
   $progress = $task_array['progress'];
 
   if ($status == 'resolved' || $status == 'rejected'){
-      $callback = _xtasks_get_status_page_callback($node);
+    // Report on task status.
+    if ($task_array['status'] == 'rejected'){
+      drupal_set_message("There were errors during task execution", 'error');
+      foreach ($task_array['errors'] as $error){
+        drupal_set_message($error, 'error');
+      }
+      $message_type = "error";
+      $message_text = t("There were errors during task execution.");
+    }
+    else{
+      drupal_set_message("Task completed successfully.");
+      foreach ($task_array['errors'] as $error){
+        drupal_set_message($error, 'warning');
+      }
+    }
+
+    // Call callback if given.
+    // @TODO: clean this up a bit.
+    if (isset($task_array['completed_page_callback'])){
+      $callback = $task_array['completed_page_callback'];
       return $callback($node);
+    }
+    else{
+      return '';
+    }
   }
   else{
     // Get or create batch job for monitoring the task.
@@ -306,14 +331,14 @@ function _xtasks_task_status_page($nid){
   }
 }
 
-function _xtasks_get_status_page_callback($node){
+function _xtasks_get_completed_page_callback($node){
   $callback = null;
-  $field = $node->xtasks_status_page_callback;
+  $field = $node->xtasks_completed_page_callback;
   if ($field){
     $callback = $field[LANGUAGE_NONE][0]['value'];
   }
   if (! $callback){
-    $callback = 'xtasks_task_status_default_finished_page';
+    $callback = 'xtasks_task_default_completed_page';
   }
   return $callback;
 }
@@ -412,7 +437,7 @@ function _xtasks_monitor_batch_finished($success, $results, $ops){
   drupal_goto(XTASKS_STATUS_EP . "/$nid");
 }
 
-function xtasks_task_status_default_finished_page($node){
+function xtasks_task_default_completed_page($node){
   $task_array = xtasks_task_to_array($node);
 
   $message_type = "status";

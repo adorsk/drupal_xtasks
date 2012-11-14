@@ -143,10 +143,10 @@ function _xtasks_fields(){
       'type' => 'text',
     ),
 
-    // Status page callback field.
+    // Completed page callback field.
     // @TODO: put this in config?
-    'xtasks_status_page_callback' => array(
-      'field_name' => 'xtasks_status_page_callback',
+    'xtasks_completed_page_callback' => array(
+      'field_name' => 'xtasks_completed_page_callback',
       'cardinality' => 1,
       'type' => 'text',
     ),
